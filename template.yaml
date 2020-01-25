@@ -22,14 +22,17 @@ Resources:
     Properties:
       CodeUri: document_search
       Handler: app.lambdaHandler
-      Runtime: nodejs8.10
+      Runtime: nodejs12.x
       Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
         Variables:
           BUCKET_NAME: !Ref TargetBucket
+          INDEX_BUCKET_NAME: !Sub "${TargetBucket}-index"
           INTERNAL_API_KEY: !Ref InternalAPIKey
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref TargetBucket
+        - S3CrudPolicy:
+            BucketName: !Sub "${TargetBucket}-index"             
       Events:
         DocumentSearch:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -41,23 +44,21 @@ Resources:
           Properties:
             Path: /add
             Method: ANY
-        SearchConfiguration:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-          Properties:
-            Path: /internal/config
-            Method: ANY
   DocumentIndexingFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: document_indexer
       Handler: app.lambdaHandler
-      Runtime: nodejs8.10
+      Runtime: nodejs12.x
       Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
         Variables:
           BUCKET_NAME: !Ref TargetBucket
+          INDEX_BUCKET_NAME: !Sub "${TargetBucket}-index"
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref TargetBucket
+        - S3CrudPolicy:
+            BucketName: !Sub "${TargetBucket}-index" 
       Events:
         DocumentAddedEvent:
           Type: S3
@@ -69,7 +70,7 @@ Resources:
     Properties:
       CodeUri: document_batch
       Handler: app.lambdaHandler
-      Runtime: nodejs8.10
+      Runtime: nodejs12.x
       Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
         Variables:
           BUCKET_NAME: !Ref TargetBucket
@@ -85,6 +86,10 @@ Resources:
     Type: "AWS::S3::Bucket"
     Properties:
       BucketName: !Ref TargetBucket
+  SearchIndexBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub "${TargetBucket}-index"
 
 Outputs:
   DocumentSearchApi:

@@ -1,0 +1,17 @@
+@baseUrl = https://oq2u5cn2uj.execute-api.us-east-1.amazonaws.com/Prod
+
+### Add receipt
+POST {{baseUrl}}/add?userId=user-12345
+Accept: application/json
+Content-type: application/json
+Authorization: {{$dotenv auth}}
+
+{
+    "id": "receipt-123456",
+    "text": "Bananas, testing, cucumbers, carrots"
+}
+
+### Find receipt
+GET {{baseUrl}}/search?userId=user-12345&q=carrots
+Accept: application/json
+Authorization: {{$dotenv auth}}

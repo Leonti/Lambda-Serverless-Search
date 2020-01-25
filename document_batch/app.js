@@ -6,6 +6,10 @@ let BUCKET_NAME, IndexConfig;
 exports.lambdaHandler = async (event, context) => {
 	BUCKET_NAME = process.env.BUCKET_NAME;
 
+
+	console.log(`Skipping batching for ${BUCKET_NAME}`)
+	return
+
 	//fetch previous cache of documents
 	let AllArticles = [];
 

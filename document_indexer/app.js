@@ -6,6 +6,7 @@ let BUCKET_NAME, IndexConfig;
 
 exports.lambdaHandler = async (event, context) => {
 	BUCKET_NAME = process.env.BUCKET_NAME;
+	INDEX_BUCKET_NAME = process.env.INDEX_BUCKET_NAME;
 
 	let AddedItem = event.Records[0].s3.object.key;
 
@@ -14,62 +15,46 @@ exports.lambdaHandler = async (event, context) => {
 		return "Skipping the addition of a non-article";
 	}
 
-	//fetch index configuration from S3
-	IndexConfig = await AWSHelper.getJSONFile(BUCKET_NAME, "search_config.json");
-	if (IndexConfig == null) {
-		return "Please set the Search Index Configuration before adding documents";
+	const userId = AddedItem.split('/')[1]
+
+	const config = {
+		"name": "receipts",
+		"fields":["text"],
+		"ref": "id",
+		"shards": 1000
 	}
 
-	//fetch previous cache of documents
-	let AllArticles = [];
+	const listOfDocuments = await AWSHelper.listObjects(BUCKET_NAME, `articles/${userId}`);
+	console.log(`Got list of articles for user '${userId}'`);
+	const listOfDocumentPromises = listOfDocuments.map(documentName => AWSHelper.getJSONFile(BUCKET_NAME, documentName));
 
-	//fetch every document uploaded to S3 in articles folder
-	let listOfDocuments = await AWSHelper.listObjects(BUCKET_NAME, "articles/");
-	console.log("Got articles list ...");
-	let listOfDocumentPromises = [];
-	for (var documentName of listOfDocuments) {
-		listOfDocumentPromises.push(AWSHelper.getJSONFile(BUCKET_NAME, documentName));
-	}
-
-	let PromiseResults = await Promise.all(listOfDocumentPromises);
-	for (var result of PromiseResults) {
-		if (result != null) {
-			let isArray = Array.isArray(result);
-			if (isArray) {
-				AllArticles = AllArticles.concat(result);
-			} else {
-				AllArticles.push(result);
-			}
-		}
-	}
+	const allUserArticles = await Promise.all(listOfDocumentPromises);
 
 	let IndexUploadPromiseArray = [];
 	//make indexes and upload them
-	for (var config of IndexConfig.configs) {
-		let ShardSize = config.shards || 1000;
-		let shardedArray = ShardArray(AllArticles, ShardSize);
+	let ShardSize = config.shards || 1000;
+	let shardedArray = ShardArray(allUserArticles, ShardSize);
 
-		let indexCount = 1;
-		for (var articles of shardedArray) {
-			//build the index up for each shard and upload new index
-			var index = lunr(function() {
-				for (var field of config.fields) {
-					this.field(field);
-				}
+	let indexCount = 1;
+	for (var articles of shardedArray) {
+		//build the index up for each shard and upload new index
+		var index = lunr(function() {
+			for (var field of config.fields) {
+				this.field(field);
+			}
 
-				this.ref(config.ref);
-				articles.forEach(function(article) {
-					this.add(article);
-				}, this);
-			});
+			this.ref(config.ref);
+			articles.forEach(function(article) {
+				this.add(article);
+			}, this);
+		});
 
-			//upload JSON Indexes in Parallel
-			IndexUploadPromiseArray.push(
-				AWSHelper.uploadToS3(BUCKET_NAME, "indexes/" + config.name + "/search_index_" + indexCount + ".json", JSON.stringify(index))
-			);
-			console.log("Uploaded index: " + config.name + "_" + indexCount);
-			indexCount++;
-		}
+		//upload JSON Indexes in Parallel
+		IndexUploadPromiseArray.push(
+			AWSHelper.uploadToS3(INDEX_BUCKET_NAME, `indexes/${userId}/` + config.name + "/search_index_" + indexCount + ".json", JSON.stringify(index))
+		);
+		console.log("Uploaded index: " + config.name + "_" + indexCount);
+		indexCount++
 	}
 
 	try {
@@ -77,13 +62,6 @@ exports.lambdaHandler = async (event, context) => {
 	} catch (e) {
 		console.log("Something went wrong: ", e);
 	}
-
-	/*
-		Keep all articles document for reference, we will not necessarily use it
-	*/
-	//update "alldocs.json"
-	await AWSHelper.uploadToS3(BUCKET_NAME, "articles_all.json", JSON.stringify(AllArticles));
-	console.log("Uploaded all articles back!");
 };
 
 function ShardArray(allitems, chunk_size) {

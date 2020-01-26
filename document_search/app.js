@@ -38,7 +38,7 @@ async function UploadArticle(bucket, userId, document) {
 	//add to S3 Bucket
 	var params = {
 		Bucket: bucket,
-		Key: `articles/${userId}/` + Date.now() + ".json",
+		Key: `articles/${userId}/` + document.id + ".json",
 		Body: JSON.stringify(document)
 	};
 
